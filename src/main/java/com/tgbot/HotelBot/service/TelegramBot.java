@@ -268,7 +268,7 @@ public class TelegramBot extends TelegramLongPollingBot{
             case "list_of_rooms":
                 List<String> listRoomsButtons = this.availableRooms.stream().map(Object::toString).toList();
                 List<String> listRoomsCallback = listRoomsButtons.stream().map(number -> "-- " + number + " --").collect(Collectors.toList());
-                if (listRoomsButtons.isEmpty()) sendMessage(chatId, text.NO_ROOMS_TEXT);
+                if (listRoomsButtons.isEmpty()) sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/noRooms.jpg", text.NO_ROOMS_TEXT);
                 else sendMessageWithInlineKeyboard(chatId, text.LIST_OF_ROOMS, listRoomsButtons, listRoomsCallback);
                 break;
 
