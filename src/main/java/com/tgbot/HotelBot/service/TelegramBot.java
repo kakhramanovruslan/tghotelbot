@@ -12,11 +12,15 @@ import lombok.SneakyThrows;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
+import java.io.File;
 import java.text.ParseException;
 import java.time.LocalDate;
 
@@ -42,7 +46,6 @@ public class TelegramBot extends TelegramLongPollingBot{
 
     private final BookingRepository bookingRepository;
 
-    private boolean waitingForResponse = false;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yy");
 
@@ -98,19 +101,17 @@ public class TelegramBot extends TelegramLongPollingBot{
 
             registration(messageText, chatId, username);
 
-            System.out.println(waitingForResponse);
-            if (waitingForResponse) {
+            Pattern datePattern = Pattern.compile("^(startDate|endDate)\\s+\\d{2}\\.\\d{2}\\.\\d{2}$");
+            if (datePattern.matcher(messageText).matches()) {
                 String[] parts = messageText.split(" ");
 
                 switch (String.valueOf(parts[0])){
                     case "startDate":
                         innerMap.put("startDate", parts[1]);
-                        waitingForResponse = false;
                         handleCallbackQuery(chatId, "end_date");
                         break;
                     case "endDate":
                         innerMap.put("endDate", parts[1]);
-                        waitingForResponse = false;
                         handleCallbackQuery(chatId, "capacity_button");
                         break;
                 }
@@ -122,68 +123,59 @@ public class TelegramBot extends TelegramLongPollingBot{
                     case "/start":
                         List<String> greetingButtons = List.of("Забронировать");
                         List<String> callbackButtons = List.of("book_button");
-                        sendMessage(chatId, text.GREETING_TEXT, greetingButtons, callbackButtons);
+                        sendPhotoWithTextAndInlineKeyboard(chatId, "src/main/java/com/tgbot/HotelBot/images/hotel.jpg", text.GREETING_TEXT, greetingButtons, callbackButtons);
                         break;
-
+                    case "/info":
+                        sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/infoHotel.jpg", text.INFO_TEXT);
+                        break;
+                    case "/info_rooms":
+                        sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/econom.jpg", text.INFO_ECONOM);
+                        sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/standart.jpg", text.INFO_STANDART);
+                        sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/lux.jpg", text.INFO_LUX);
+                        break;
+                    case "/commands":
+                        sendMessage(chatId, text.COMMANDS_TEXT);
                 }
             }
-        }
-    }
-
-
-    private void registration(String messageText, Long chatId, String username) {
-        Pattern pattern = Pattern.compile("^[\\p{L}]+ [\\p{L}]+ \\+?\\d+$");
-        Matcher matcher = pattern.matcher(messageText);
-
-        if (matcher.matches() && !isRegister(chatId)) {
-            String[] parts = messageText.split(" ");
-            String firstName = parts[0];
-            String lastName = parts[1];
-            String phoneNumber = parts[2];
-
-            User user = new User();
-            user.setFirstName(firstName);
-            user.setLastName(lastName);
-            user.setPhoneNumber(phoneNumber);
-            user.setChatId(chatId);
-            user.setUsername(username);
-
-            userRepository.save(user);
-
         }
     }
 
     private void handleCallbackQuery(Long chatId, String callbackData) throws ParseException {
 
         switch (callbackData) {
+
             case "book_button":
-                if (!isRegister(chatId)) sendMessage(chatId, text.REGISTER_TEXT, null, null);
+                if (!isRegister(chatId)) sendMessage(chatId, text.REGISTER_TEXT);
                 else {
-                    sendMessage(chatId, text.START_DATE_TEXT, null, null);
-                    waitingForResponse = true;
+                    sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/checkIn.jpeg", text.START_DATE_TEXT);
                 }
                 break;
+
             case "end_date":
-                sendMessage(chatId, text.END_DATE_TEXT, null, null);
-                waitingForResponse = true;
+                sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/checkOut.jpg", text.END_DATE_TEXT);
                 break;
+
             case "capacity_button":
                 List<String> capacityButtons = List.of("1", "2", "3", "4");
                 List<String> callbackButtons = List.of("capacity_1", "capacity_2", "capacity_3", "capacity_4");
-                sendMessage(chatId, text.CAPACITY_TEXT, capacityButtons, callbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.CAPACITY_TEXT, capacityButtons, callbackButtons);
                 break;
+
             case "capacity_1":
                 answers.get(chatId).put("capacity", "1");
                 handleCallbackQuery(chatId, "category_button");
                 break;
+
             case "capacity_2":
                 answers.get(chatId).put("capacity", "2");
                 handleCallbackQuery(chatId, "category_button");
                 break;
+
             case "capacity_3":
                 answers.get(chatId).put("capacity", "3");
                 handleCallbackQuery(chatId, "category_button");
                 break;
+
             case "capacity_4":
                 answers.get(chatId).put("capacity", "4");
                 handleCallbackQuery(chatId, "category_button");
@@ -192,62 +184,74 @@ public class TelegramBot extends TelegramLongPollingBot{
             case "category_button":
                 List<String> categoryButtons = List.of("Эконом", "Стандарт", "Люкс");
                 List<String> сategoryCallbackButtons = List.of("econom", "standart", "lux");
-                sendMessage(chatId, text.CATEGORY_TEXT, categoryButtons, сategoryCallbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.CATEGORY_TEXT, categoryButtons, сategoryCallbackButtons);
                 break;
 
             case "econom":
                 answers.get(chatId).put("category", "Эконом");
                 handleCallbackQuery(chatId, "balcony");
                 break;
+
             case "standart":
                 answers.get(chatId).put("category", "Стандарт");
                 handleCallbackQuery(chatId, "balcony");
                 break;
+
             case "lux":
                 answers.get(chatId).put("category", "Люкс");
                 handleCallbackQuery(chatId, "balcony");
                 break;
+
             case "balcony":
                 List<String> balconyButtons = List.of("Да", "Нет");
                 List<String> balconyCallbackButtons = List.of("balcony_yes", "balcony_no");
-                sendMessage(chatId, text.BALCONY_TEXT, balconyButtons, balconyCallbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.BALCONY_TEXT, balconyButtons, balconyCallbackButtons);
                 break;
+
             case "babyBed":
                 List<String> babyBedButtons = List.of("Да", "Нет");
                 List<String> babyBedCallbackButtons = List.of("babyBed_yes", "babyBed_no");
-                sendMessage(chatId, text.BABY_BED_TEXT, babyBedButtons, babyBedCallbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.BABY_BED_TEXT, babyBedButtons, babyBedCallbackButtons);
                 break;
+
             case "smokingRoom":
                 List<String> smokingRoomButtons = List.of("Да", "Нет");
                 List<String> smokingRoomCallbackButtons = List.of("smokingRoom_yes", "smokingRoom_no");
-                sendMessage(chatId, text.SMOKING_ROOM_TEXT, smokingRoomButtons, smokingRoomCallbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.SMOKING_ROOM_TEXT, smokingRoomButtons, smokingRoomCallbackButtons);
                 break;
+
             case "balcony_yes":
                 answers.get(chatId).put("hasBalcony", "True");
                 handleCallbackQuery(chatId, "babyBed");
                 break;
+
             case "balcony_no":
                 answers.get(chatId).put("hasBalcony", "False");
                 handleCallbackQuery(chatId, "babyBed");
                 break;
+
             case "babyBed_yes":
                 answers.get(chatId).put("hasBabyBed", "True");
                 handleCallbackQuery(chatId, "smokingRoom");
                 break;
+
             case "babyBed_no":
                 answers.get(chatId).put("hasBabyBed", "False");
                 handleCallbackQuery(chatId, "smokingRoom");
                 break;
+
             case "smokingRoom_yes":
                 answers.get(chatId).put("smokingAllowed", "True");
                 handleCallbackQuery(chatId, "find");
                 System.out.println(answers);
                 break;
+
             case "smokingRoom_no":
                 answers.get(chatId).put("smokingAllowed", "False");
                 handleCallbackQuery(chatId, "find");
                 System.out.println(answers);
                 break;
+
             case "find":
                 this.availableRooms = roomRepository.findAvailableRoomNumbers(
                         answers.get(chatId).get("category"),
@@ -260,15 +264,14 @@ public class TelegramBot extends TelegramLongPollingBot{
                 );
                 handleCallbackQuery(chatId, "list_of_rooms");
                 break;
+
             case "list_of_rooms":
                 List<String> listRoomsButtons = this.availableRooms.stream().map(Object::toString).toList();
                 List<String> listRoomsCallback = listRoomsButtons.stream().map(number -> "-- " + number + " --").collect(Collectors.toList());
-                if (listRoomsButtons.isEmpty()) {
-                    sendMessage(chatId, text.NO_ROOMS_TEXT, null, null);
-                } else {
-                    sendMessage(chatId, text.LIST_OF_ROOMS, listRoomsButtons, listRoomsCallback);
-                }
+                if (listRoomsButtons.isEmpty()) sendMessage(chatId, text.NO_ROOMS_TEXT);
+                else sendMessageWithInlineKeyboard(chatId, text.LIST_OF_ROOMS, listRoomsButtons, listRoomsCallback);
                 break;
+
             case "booking":
                 Booking booking = new Booking();
                 Optional<User> user = userRepository.findByChatId(chatId);
@@ -279,12 +282,13 @@ public class TelegramBot extends TelegramLongPollingBot{
                 booking.setCheckInDateTime(LocalDateTime.of(LocalDate.parse(answers.get(chatId).get("startDate"), formatter), LocalTime.NOON));
                 booking.setCheckOutDateTime(LocalDateTime.of(LocalDate.parse(answers.get(chatId).get("endDate"), formatter), LocalTime.NOON));
                 bookingRepository.save(booking);
-                sendMessage(chatId, text.END_TEXT, null, null);
+                sendPhotoWithText(chatId, "src/main/java/com/tgbot/HotelBot/images/succesfullyBooking.jpg", text.END_TEXT);
                 break;
+
             case "booking_start":
                 List<String> finalBookButtons = List.of("Я согласен", "Отмена");
                 List<String> finalBookCallbackButtons = List.of("booking", "/start");
-                sendMessage(chatId, text.ACK_BOOK_TEXT+answers.get(chatId).get("totalPrice"), finalBookButtons, finalBookCallbackButtons);
+                sendMessageWithInlineKeyboard(chatId, text.ACK_BOOK_TEXT+answers.get(chatId).get("totalPrice"), finalBookButtons, finalBookCallbackButtons);
                 break;
         }
     }
@@ -295,7 +299,7 @@ public class TelegramBot extends TelegramLongPollingBot{
     };
 
 
-    private void sendMessage(long chatId, String text, List<String> buttons, List<String> callbackNames) {
+    private void sendMessageWithInlineKeyboard(long chatId, String text, List<String> buttons, List<String> callbackNames) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
@@ -324,6 +328,84 @@ public class TelegramBot extends TelegramLongPollingBot{
             execute(message);
         } catch (TelegramApiException e) {
             System.out.println("Message sent rejected");
+        }
+    }
+
+
+
+    private void sendMessage(long chatId, String text) {
+        try{
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        execute(message);
+        } catch (TelegramApiException e) {
+            System.out.println("Message sent rejected");
+        }
+    }
+
+    private void registration(String messageText, Long chatId, String username) {
+        Pattern pattern = Pattern.compile("^[\\p{L}]+ [\\p{L}]+ \\+?\\d+$");
+        Matcher matcher = pattern.matcher(messageText);
+
+        if (matcher.matches() && !isRegister(chatId)) {
+            String[] parts = messageText.split(" ");
+            String firstName = parts[0];
+            String lastName = parts[1];
+            String phoneNumber = parts[2];
+
+            User user = new User();
+            user.setFirstName(firstName);
+            user.setLastName(lastName);
+            user.setPhoneNumber(phoneNumber);
+            user.setChatId(chatId);
+            user.setUsername(username);
+
+            userRepository.save(user);
+
+        }
+    }
+
+    public void sendPhotoWithTextAndInlineKeyboard(Long chatId, String photoPath, String caption, List<String> buttonLabels, List<String> callbackData) {
+        File photo = new File(photoPath);
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(String.valueOf(chatId));
+        sendPhoto.setPhoto(new InputFile(photo));
+        sendPhoto.setCaption(caption);
+
+        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+
+        for (int i = 0; i < buttonLabels.size(); i++) {
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            InlineKeyboardButton button = new InlineKeyboardButton();
+            button.setText(buttonLabels.get(i));
+            button.setCallbackData(callbackData.get(i));
+            row.add(button);
+            rowsInline.add(row);
+        }
+
+        inlineKeyboardMarkup.setKeyboard(rowsInline);
+        sendPhoto.setReplyMarkup(inlineKeyboardMarkup);
+
+        try {
+            execute(sendPhoto);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendPhotoWithText(Long chatId, String photoPath, String caption) {
+        File photo = new File(photoPath);
+        SendPhoto sendPhoto = new SendPhoto();
+        sendPhoto.setChatId(String.valueOf(chatId));
+        sendPhoto.setPhoto(new InputFile(photo));
+        sendPhoto.setCaption(caption);
+
+        try {
+            execute(sendPhoto);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
         }
     }
 
